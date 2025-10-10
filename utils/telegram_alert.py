@@ -1,5 +1,6 @@
 # utils/telegram_alert.py
 
+import os
 import logging
 from telegram import Bot
 from datetime import datetime
