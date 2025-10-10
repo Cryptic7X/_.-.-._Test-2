@@ -82,7 +82,10 @@ def analyze_single_coin(base_symbol, data_fetcher, signal_detector):
         k_val = timeframe_data['15m']['k']
         d_val = timeframe_data['15m']['d']
         
-        print(f"✓ {base_symbol:8s} | 15m: K={k_val:6.2f} D={d_val:6.2f} [{base_signal}]")
+        if k_val and d_val:
+            print(f"✓ {base_symbol:8s} | 15m: K={k_val:6.2f} D={d_val:6.2f} [{base_signal}]")
+        else:
+            print(f"✗ {base_symbol:8s} | No data")
         
         return {
             'base_symbol': base_symbol,
@@ -130,8 +133,8 @@ async def analyze_coins_parallel(coins, data_fetcher, signal_detector, max_worke
     
     return results
 
-def send_alerts(results, signal_detector, telegram_notifier):
-    """Send Telegram alerts for qualifying signals"""
+async def send_alerts(results, signal_detector, telegram_notifier):
+    """Send Telegram alerts for qualifying signals (ASYNC VERSION)"""
     alerts_sent = 0
     
     for result in results:
@@ -146,10 +149,14 @@ def send_alerts(results, signal_detector, telegram_notifier):
                     result['ticker_info']
                 )
                 
-                if telegram_notifier.send_message(message):
+                # AWAIT the async send_message function
+                if await telegram_notifier.send_message(message):
                     signal_detector.update_cooldown(result['base_symbol'], base_signal)
                     alerts_sent += 1
                     print(f"  📤 Alert sent: {result['base_symbol']} [{base_signal}]")
+                
+                # Small delay between messages
+                await asyncio.sleep(0.5)
     
     return alerts_sent
 
@@ -183,12 +190,12 @@ async def main_async():
     
     analysis_time = time.time() - start_time
     
-    # Send alerts
+    # Send alerts (NOW ASYNC)
     print(f"\n{'='*60}")
     print(f"📨 Sending Alerts...")
     print(f"{'='*60}")
     
-    alerts_sent = send_alerts(results, signal_detector, telegram_notifier)
+    alerts_sent = await send_alerts(results, signal_detector, telegram_notifier)
     
     # Print summary
     total_time = time.time() - start_time
