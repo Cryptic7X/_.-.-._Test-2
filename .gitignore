@@ -1,3 +1,10 @@
 __pycache__/
 *.py[cod]
+*.pyc
+.Python
+*.so
 alert_cache.json
+.vscode/
+.idea/
+*.swp
+.DS_Store
