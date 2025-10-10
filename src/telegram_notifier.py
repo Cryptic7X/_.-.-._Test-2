@@ -10,20 +10,18 @@ class TelegramNotifier:
         self.bot = Bot(token=bot_token)
         self.chat_id = chat_id
     
-    def format_message(self, symbol: str, timeframe_data: dict, ticker_info: dict) -> str:
+    def format_message(self, base_symbol: str, full_symbol: str, timeframe_data: dict, ticker_info: dict) -> str:
         """
         Format comprehensive alert message
         
         Args:
-            symbol: Trading pair (e.g., 'BTC/USDT')
+            base_symbol: Base currency (e.g., 'BTC')
+            full_symbol: Full trading pair (e.g., 'BTC/USDT')
             timeframe_data: {timeframe: {'k': float, 'd': float, 'signal': str}}
             ticker_info: {'price': float, 'change_24h': float}
         
         Returns: Formatted message string
         """
-        # Extract base symbol for links
-        base_symbol = symbol.replace('/USDT', '').replace('/USDC', '')
-        
         # Determine alert type from 15m timeframe
         base_signal = timeframe_data.get('15m', {}).get('signal', 'NEUTRAL')
         
@@ -40,8 +38,9 @@ class TelegramNotifier:
         
         # Build message
         msg = f"{emoji} **{alert_type}** {emoji}\n\n"
-        msg += f"**Symbol:** {symbol}\n"
-        msg += f"**Price:** ${ticker_info.get('price', 'N/A'):.4f}\n"
+        msg += f"**Symbol:** {base_symbol}\n"
+        msg += f"**Pair:** {full_symbol}\n"
+        msg += f"**Price:** ${ticker_info.get('price', 0):.4f}\n"
         
         change = ticker_info.get('change_24h', 0)
         change_emoji = '📈' if change > 0 else '📉'
@@ -76,7 +75,7 @@ class TelegramNotifier:
             msg += f"   %K: {k_str}  |  %D: {d_str}\n"
             msg += f"   Status: {signal}\n\n"
         
-        # Links
+        # Links - use base symbol for TradingView
         msg += "**Quick Links:**\n"
         msg += f"📊 [TradingView 15m Chart](https://www.tradingview.com/chart/?symbol=BINANCE:{base_symbol}USDT&interval=15)\n"
         msg += f"📈 [CoinGlass Analytics](https://www.coinglass.com/currencies/{base_symbol.lower()})\n"
