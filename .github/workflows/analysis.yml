@@ -35,6 +35,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       
+      - name: Create data directory if not exists
+        run: mkdir -p data
+      
       - name: Run Stochastic RSI Analysis
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -43,10 +46,22 @@ jobs:
           cd src
           python main.py
       
+      - name: Check for changes
+        id: verify_diff
+        run: |
+          git diff --quiet data/cooldowns.json || echo "changed=true" >> $GITHUB_OUTPUT
+      
       - name: Commit cooldown data changes
+        if: steps.verify_diff.outputs.changed == 'true'
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add data/cooldowns.json
-          git diff --quiet && git diff --staged --quiet || git commit -m "Update cooldowns - $(date +'%Y-%m-%d %H:%M:%S')"
-          git push
+          git commit -m "Update cooldowns - $(date +'%Y-%m-%d %H:%M:%S')"
+      
+      - name: Push changes
+        if: steps.verify_diff.outputs.changed == 'true'
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref }}
