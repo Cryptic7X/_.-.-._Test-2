@@ -1,7 +1,8 @@
 name: Stoch RSI
 
 on:
-  schedule: [{cron:'*/15 * * * *'}]
+  schedule:
+    - cron: '*/15 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -12,24 +13,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: {python-version:'3.11',cache:'pip'}
+        with:
+          python-version: '3.11'
+          cache: 'pip'
       - run: |
           pip install -r requirements.txt
-      - name: download cache
+      - name: Download cache
         uses: actions/download-artifact@v4
-        with: {name:alert-cache}
+        with:
+          name: alert-cache
         continue-on-error: true
-      - name: run
+      - name: Run analysis
         env:
-          TELEGRAM_BOT_TOKEN: ${{secrets.TELEGRAM_BOT_TOKEN}}
-          TELEGRAM_CHAT_ID: ${{secrets.TELEGRAM_CHAT_ID}}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python main.py
       - name: Upload cache
-        uses: actions/upload-artifact@v4
         if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: alert-cache
           path: alert_cache.json
           if-no-files-found: ignore
           retention-days: 7
+
 
