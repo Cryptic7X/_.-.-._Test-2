@@ -134,7 +134,7 @@ async def analyze_coins_parallel(coins, data_fetcher, signal_detector, max_worke
     return results
 
 async def send_alerts(results, signal_detector, telegram_notifier):
-    """Send Telegram alerts for qualifying signals (ASYNC VERSION)"""
+    """Send Telegram alerts for qualifying signals - ASYNC VERSION"""
     alerts_sent = 0
     
     for result in results:
@@ -149,7 +149,7 @@ async def send_alerts(results, signal_detector, telegram_notifier):
                     result['ticker_info']
                 )
                 
-                # AWAIT the async send_message function
+                # CRITICAL: AWAIT the async send_message function
                 if await telegram_notifier.send_message(message):
                     signal_detector.update_cooldown(result['base_symbol'], base_signal)
                     alerts_sent += 1
@@ -190,7 +190,7 @@ async def main_async():
     
     analysis_time = time.time() - start_time
     
-    # Send alerts (NOW ASYNC)
+    # Send alerts - CRITICAL: AWAIT THIS
     print(f"\n{'='*60}")
     print(f"📨 Sending Alerts...")
     print(f"{'='*60}")
