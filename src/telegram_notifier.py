@@ -82,7 +82,7 @@ class TelegramNotifier:
         return msg
     
     async def send_message(self, message: str) -> bool:
-        """Send Telegram message asynchronously (MUST BE AWAITED)"""
+        """Send Telegram message asynchronously - MUST BE AWAITED"""
         try:
             await self.bot.send_message(
                 chat_id=self.chat_id,
