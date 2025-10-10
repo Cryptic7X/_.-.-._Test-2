@@ -1,39 +1,35 @@
 """
-Telegram alert system for Stochastic RSI signals
+Telegram alert system
 """
 import asyncio
-from telegram import Bot
-from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
-from utils.logging_setup import setup_logger
+import logging
 
-logger = setup_logger(__name__)
+logger = logging.getLogger(__name__)
+
+# Import inside functions to avoid issues
+def send_telegram_alert(symbol, signal_type, timeframe_data, primary_timeframe):
+    """Send alert to Telegram (synchronous wrapper)"""
+    return asyncio.run(send_alert_async(symbol, signal_type, timeframe_data, primary_timeframe))
 
 
-async def send_telegram_alert(symbol, signal_type, timeframe_data, primary_timeframe):
-    """
-    Send formatted alert to Telegram
-
-    Args:
-        symbol: Trading pair symbol (e.g., 'BTCUSDT')
-        signal_type: 'OVERBOUGHT' or 'OVERSOLD'
-        timeframe_data: Dictionary with timeframe analysis
-        primary_timeframe: The main timeframe that triggered the alert
-    """
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        logger.error("Telegram credentials not configured")
-        return False
-
+async def send_alert_async(symbol, signal_type, timeframe_data, primary_timeframe):
+    """Send formatted alert to Telegram"""
     try:
-        bot = Bot(token=TELEGRAM_BOT_TOKEN)
+        from telegram import Bot
+        import config
 
-        # Create formatted message
+        if not config.TELEGRAM_BOT_TOKEN or not config.TELEGRAM_CHAT_ID:
+            logger.error("Telegram credentials not configured")
+            return False
+
+        bot = Bot(token=config.TELEGRAM_BOT_TOKEN)
+
         emoji = "🔴" if signal_type == "OVERBOUGHT" else "🟢"
 
         message = f"{emoji} *Stochastic RSI Alert*\n\n"
         message += f"*Symbol:* {symbol}\n"
         message += f"*Signal:* {signal_type}\n"
         message += f"*Primary Timeframe:* {primary_timeframe}\n\n"
-
         message += "*Multi-Timeframe Analysis:*\n"
         message += "```\n"
 
@@ -43,18 +39,16 @@ async def send_telegram_alert(symbol, signal_type, timeframe_data, primary_timef
                 k_val = data.get('k', 0)
                 d_val = data.get('d', 0)
                 status = data.get('status', 'NEUTRAL')
-
                 message += f"{tf:4} | K: {k_val:5.2f} | D: {d_val:5.2f} | {status}\n"
 
         message += "```\n"
 
-        # Add TradingView link
-        clean_symbol = symbol.replace('USDT', '')
-        tv_link = f"https://www.tradingview.com/chart/?symbol=BINANCE:{symbol}"
+        clean_symbol = symbol.replace('/', '')
+        tv_link = f"https://www.tradingview.com/chart/?symbol=BINANCE:{clean_symbol}"
         message += f"\n[View on TradingView]({tv_link})"
 
         await bot.send_message(
-            chat_id=TELEGRAM_CHAT_ID,
+            chat_id=config.TELEGRAM_CHAT_ID,
             text=message,
             parse_mode='Markdown',
             disable_web_page_preview=True
@@ -62,14 +56,6 @@ async def send_telegram_alert(symbol, signal_type, timeframe_data, primary_timef
 
         logger.info(f"Alert sent for {symbol} - {signal_type}")
         return True
-
     except Exception as e:
         logger.error(f"Error sending Telegram alert: {e}")
         return False
-
-
-def send_alert_sync(symbol, signal_type, timeframe_data, primary_timeframe):
-    """
-    Synchronous wrapper for sending alerts
-    """
-    return asyncio.run(send_telegram_alert(symbol, signal_type, timeframe_data, primary_timeframe))
