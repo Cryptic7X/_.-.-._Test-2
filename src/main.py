@@ -1,6 +1,7 @@
 import os
 import time
 import asyncio
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 from data_fetcher import DataFetcher
@@ -133,32 +134,40 @@ async def analyze_coins_parallel(coins, data_fetcher, signal_detector, max_worke
     
     return results
 
-async def send_alerts(results, signal_detector, telegram_notifier):
-    """Send Telegram alerts for qualifying signals - ASYNC VERSION"""
-    alerts_sent = 0
+async def send_consolidated_alert(results, signal_detector, telegram_notifier):
+    """
+    Send a SINGLE consolidated alert with all qualifying signals
+    
+    Returns: Number of signals included in the alert
+    """
+    # Collect all qualifying alerts
+    qualifying_alerts = []
     
     for result in results:
         base_signal = result['timeframe_data']['15m']['signal']
         
         if signal_detector.should_send_alert(result['base_symbol'], base_signal):
-            if telegram_notifier:
-                message = telegram_notifier.format_message(
-                    result['base_symbol'],
-                    result['symbol'],
-                    result['timeframe_data'],
-                    result['ticker_info']
-                )
-                
-                # CRITICAL: AWAIT the async send_message function
-                if await telegram_notifier.send_message(message):
-                    signal_detector.update_cooldown(result['base_symbol'], base_signal)
-                    alerts_sent += 1
-                    print(f"  📤 Alert sent: {result['base_symbol']} [{base_signal}]")
-                
-                # Small delay between messages
-                await asyncio.sleep(0.5)
+            # Add timestamp
+            result['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            qualifying_alerts.append(result)
+            # Update cooldown
+            signal_detector.update_cooldown(result['base_symbol'], base_signal)
     
-    return alerts_sent
+    # Send single consolidated message if there are alerts
+    if qualifying_alerts and telegram_notifier:
+        message = telegram_notifier.format_bulk_message(qualifying_alerts)
+        
+        if message and await telegram_notifier.send_message(message):
+            print(f"  📤 Consolidated alert sent with {len(qualifying_alerts)} signals")
+            return len(qualifying_alerts)
+        else:
+            print(f"  ✗ Failed to send consolidated alert")
+            return 0
+    elif not qualifying_alerts:
+        print(f"  ℹ️  No new signals to alert (all in cooldown or neutral)")
+        return 0
+    
+    return 0
 
 async def main_async():
     """Main analysis loop with parallel processing"""
@@ -190,12 +199,12 @@ async def main_async():
     
     analysis_time = time.time() - start_time
     
-    # Send alerts - CRITICAL: AWAIT THIS
+    # Send SINGLE consolidated alert
     print(f"\n{'='*60}")
-    print(f"📨 Sending Alerts...")
+    print(f"📨 Preparing Consolidated Alert...")
     print(f"{'='*60}")
     
-    alerts_sent = await send_alerts(results, signal_detector, telegram_notifier)
+    signals_sent = await send_consolidated_alert(results, signal_detector, telegram_notifier)
     
     # Print summary
     total_time = time.time() - start_time
@@ -203,7 +212,7 @@ async def main_async():
     print(f"✅ Analysis Complete")
     print(f"{'='*60}")
     print(f"Coins Analyzed: {len(results)}/{len(coins)}")
-    print(f"Alerts Sent: {alerts_sent}")
+    print(f"Signals in Alert: {signals_sent}")
     print(f"Analysis Time: {analysis_time:.1f}s")
     print(f"Total Time: {total_time:.1f}s")
     print(f"Avg per coin: {analysis_time/max(len(results), 1):.1f}s")
