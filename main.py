@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Main script for Stochastic RSI Alerts System
+Multi-exchange support: Bybit, KuCoin, OKX, BingX
 """
 import sys
 import os
@@ -28,7 +29,7 @@ from utils.telegram_alert import send_telegram_alert
 
 
 # ============================================================================
-# ALERT MANAGER (inline to avoid import issues)
+# ALERT MANAGER
 # ============================================================================
 
 class AlertManager:
@@ -100,7 +101,7 @@ class AlertManager:
 
 
 # ============================================================================
-# STOCHASTIC RSI CALCULATION (inline to avoid import issues)
+# STOCHASTIC RSI CALCULATION
 # ============================================================================
 
 def calculate_rsi(src, length):
@@ -175,29 +176,76 @@ def determine_signal(k_value, d_value, overbought=80, oversold=20):
 
 
 # ============================================================================
-# EXCHANGE AND DATA FETCHING
+# EXCHANGE AND DATA FETCHING - MULTI-EXCHANGE SUPPORT
 # ============================================================================
 
 def get_exchange():
-    """Initialize CCXT exchange"""
+    """
+    Initialize CCXT exchange with fallback support
+    Tries exchanges in priority order: Bybit -> KuCoin -> OKX -> BingX
+    """
+    for exchange_name in config.EXCHANGE_PRIORITY:
+        try:
+            exchange_class = getattr(ccxt, exchange_name)
+            exchange = exchange_class(config.EXCHANGE_OPTIONS)
+
+            # Test the exchange by loading markets
+            exchange.load_markets()
+            logger.info(f"✓ Successfully initialized {exchange_name.upper()} exchange")
+            return exchange
+
+        except Exception as e:
+            logger.warning(f"✗ Failed to initialize {exchange_name}: {e}")
+            continue
+
+    # If all exchanges fail
+    raise Exception("Failed to initialize any exchange. Please check your internet connection.")
+
+
+def normalize_symbol(symbol, exchange):
+    """
+    Normalize symbol format for the exchange
+    Converts BTC/USDT to exchange-specific format
+    """
     try:
-        exchange_class = getattr(ccxt, config.EXCHANGE_NAME)
-        exchange = exchange_class(config.EXCHANGE_OPTIONS)
-        logger.info(f"Initialized {config.EXCHANGE_NAME} exchange")
-        return exchange
-    except Exception as e:
-        logger.error(f"Error initializing exchange: {e}")
-        raise
+        # Check if symbol exists in exchange markets
+        if symbol in exchange.markets:
+            return symbol
+
+        # Try alternative formats
+        base_symbol = symbol.replace('/', '').replace('USDT', '/USDT')
+        if base_symbol in exchange.markets:
+            return base_symbol
+
+        # If still not found, return original
+        return symbol
+    except:
+        return symbol
 
 
 def fetch_ohlcv_data(exchange, symbol, timeframe, limit=100):
-    """Fetch OHLCV data"""
+    """
+    Fetch OHLCV data with error handling
+    """
     try:
-        ohlcv = exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
+        # Normalize symbol for this exchange
+        normalized_symbol = normalize_symbol(symbol, exchange)
+
+        ohlcv = exchange.fetch_ohlcv(normalized_symbol, timeframe, limit=limit)
+
         if not ohlcv or len(ohlcv) == 0:
             logger.warning(f"No data for {symbol} {timeframe}")
             return None
+
+        logger.debug(f"Fetched {len(ohlcv)} candles for {symbol} {timeframe}")
         return ohlcv
+
+    except ccxt.BadSymbol as e:
+        logger.warning(f"Symbol {symbol} not available on {exchange.id}: {e}")
+        return None
+    except ccxt.NetworkError as e:
+        logger.error(f"Network error fetching {symbol} {timeframe}: {e}")
+        return None
     except Exception as e:
         logger.error(f"Error fetching {symbol} {timeframe}: {e}")
         return None
@@ -208,16 +256,22 @@ def fetch_ohlcv_data(exchange, symbol, timeframe, limit=100):
 # ============================================================================
 
 def load_coins():
-    """Load coins from coins.txt (comma-separated format)"""
+    """
+    Load coins from coins.txt (comma-separated format)
+    Handles: ETHUSDT, BTCUSDT or ETH/USDT, BTC/USDT
+    """
     try:
         with open(config.COINS_FILE, 'r') as f:
             content = f.read()
 
+        # Split by comma and clean up
         coins = [coin.strip() for coin in content.split(',') if coin.strip()]
 
+        # Convert to CCXT format (BTC/USDT)
         formatted_coins = []
         for coin in coins:
             if '/' not in coin:
+                # Convert BTCUSDT to BTC/USDT
                 if coin.endswith('USDT'):
                     formatted = coin[:-4] + '/USDT'
                 else:
@@ -228,6 +282,7 @@ def load_coins():
 
         logger.info(f"Loaded {len(formatted_coins)} coins")
         return formatted_coins
+
     except Exception as e:
         logger.error(f"Error loading coins: {e}")
         return []
@@ -301,6 +356,7 @@ def analyze_symbol(exchange, symbol, alert_manager):
                 logger.info(f"✓ {symbol} is NEUTRAL")
 
         return True
+
     except Exception as e:
         logger.error(f"Error analyzing {symbol}: {e}")
         return False
@@ -317,7 +373,14 @@ def main():
     logger.info("STOCHASTIC RSI ALERTS SYSTEM - STARTING")
     logger.info("="*60)
 
-    exchange = get_exchange()
+    # Initialize exchange with fallback
+    try:
+        exchange = get_exchange()
+        logger.info(f"Using exchange: {exchange.id.upper()}")
+    except Exception as e:
+        logger.error(f"Failed to initialize any exchange: {e}")
+        return
+
     alert_manager = AlertManager()
     coins = load_coins()
 
@@ -329,6 +392,7 @@ def main():
     logger.info(f"Parameters: RSI={config.LENGTH_RSI}, Stoch={config.LENGTH_STOCH}, K={config.SMOOTH_K}, D={config.SMOOTH_D}")
     logger.info(f"Primary Timeframe: {config.PRIMARY_TIMEFRAME}")
 
+    # Analyze each coin
     success_count = 0
     for i, symbol in enumerate(coins, 1):
         logger.info(f"\nProcessing {i}/{len(coins)}: {symbol}")
@@ -336,6 +400,7 @@ def main():
         if analyze_symbol(exchange, symbol, alert_manager):
             success_count += 1
 
+        # Rate limiting between symbols
         if i < len(coins):
             time.sleep(exchange.rateLimit / 1000)
 
@@ -343,6 +408,7 @@ def main():
     logger.info("\n" + "="*60)
     logger.info("ANALYSIS COMPLETE")
     logger.info(f"Successfully analyzed: {success_count}/{len(coins)} coins")
+    logger.info(f"Exchange used: {exchange.id.upper()}")
     logger.info(f"Time elapsed: {elapsed_time:.2f} seconds")
     logger.info("="*60)
 
