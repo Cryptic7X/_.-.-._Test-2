@@ -1,7 +1,6 @@
 import os
 from telegram import Bot
 from telegram.error import TelegramError
-import asyncio
 
 class TelegramNotifier:
     """Format and send Telegram alerts"""
@@ -82,8 +81,8 @@ class TelegramNotifier:
         
         return msg
     
-    async def send_message_async(self, message: str) -> bool:
-        """Send Telegram message asynchronously"""
+    async def send_message(self, message: str) -> bool:
+        """Send Telegram message asynchronously (MUST BE AWAITED)"""
         try:
             await self.bot.send_message(
                 chat_id=self.chat_id,
@@ -95,7 +94,3 @@ class TelegramNotifier:
         except TelegramError as e:
             print(f"Telegram error: {e}")
             return False
-    
-    def send_message(self, message: str) -> bool:
-        """Send Telegram message (synchronous wrapper)"""
-        return asyncio.run(self.send_message_async(message))
