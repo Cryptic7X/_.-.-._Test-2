@@ -25,11 +25,17 @@ COOLDOWN_PERIODS = {
     '1d': 1440
 }
 
-# Exchange Configuration
-EXCHANGE_NAME = 'binance'
+# Exchange Configuration - Multiple exchanges with fallback
+# Priority order: Will try exchanges in this order if one fails
+EXCHANGE_PRIORITY = ['bybit', 'kucoin', 'okx', 'bingx']
+
+# Exchange-specific options
 EXCHANGE_OPTIONS = {
     'enableRateLimit': True,
-    'rateLimit': 1200
+    'rateLimit': 1200,
+    'options': {
+        'defaultType': 'spot'  # Ensure we're using spot markets
+    }
 }
 
 # Data Fetching
