@@ -1,0 +1,49 @@
+name: Stochastic RSI Analysis
+
+on:
+  schedule:
+    # Run every 15 minutes
+    - cron: '*/15 * * * *'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14  # Must complete within 14 minutes to avoid overlap
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Stochastic RSI Analysis
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python main.py
+
+      - name: Upload cache artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: alert-cache
+          path: alert_cache.json
+          retention-days: 7
+
+      - name: Download previous cache
+        if: always()
+        uses: actions/download-artifact@v4
+        with:
+          name: alert-cache
+        continue-on-error: true
