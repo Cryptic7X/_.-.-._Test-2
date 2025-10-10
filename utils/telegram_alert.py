@@ -15,7 +15,7 @@ def create_chart_links(symbol: str, timeframe_minutes: int):
 
 
 def send_alert(symbol, signal, tf_data, primary_tf, tv_link, cg_link):
-    """Send Telegram alert"""
+    """Send Telegram alert with exact K/D values"""
     try:
         from telegram import Bot
         
@@ -28,15 +28,18 @@ def send_alert(symbol, signal, tf_data, primary_tf, tv_link, cg_link):
         
         bot = Bot(token=bot_token)
         
-        # Format message
+        # Format message with exact values
         head = f"🔴 Stochastic RSI {primary_tf.upper()}\n⏰ {datetime.now():%Y-%m-%d %H:%M IST}"
-        lines = [f"🔸 {symbol} {signal}"]
+        lines = [f"🔸 {symbol} {signal}\n"]
         
-        for tf, d in tf_data.items():
-            lines.append(f"• {tf:<3} | K:{d['k']:.2f} | D:{d['d']:.2f} | {d['status']}")
+        # Show all timeframes with exact K/D values
+        for tf in ['15m', '1h', '4h', '1d']:
+            if tf in tf_data:
+                d = tf_data[tf]
+                lines.append(f"• {tf:<3} | K:{d['k']:6.2f} | D:{d['d']:6.2f} | {d['status']}")
         
-        footer = f"[TV]({tv_link}) | [CG]({cg_link})"
-        text = f"{head}\n\n" + "\n".join(lines) + "\n\n" + footer + "\n\n#StochasticRSI"
+        footer = f"\n[TV]({tv_link}) | [CG]({cg_link})"
+        text = f"{head}\n" + "\n".join(lines) + footer + "\n\n#StochasticRSI"
         
         bot.send_message(
             chat_id=chat_id,
@@ -47,4 +50,4 @@ def send_alert(symbol, signal, tf_data, primary_tf, tv_link, cg_link):
         logger.info("✓ Alert sent")
         
     except Exception as e:
-        logger.error(f"Failed to send alert: {e}")
+        logger.error(f"Alert error: {e}")
