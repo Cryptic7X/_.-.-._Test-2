@@ -81,16 +81,138 @@ class TelegramNotifier:
         
         return msg
     
+    def format_bulk_message(self, alerts: list) -> str:
+        """
+        Format multiple alerts into a single consolidated message
+        
+        Args:
+            alerts: List of dicts with keys: base_symbol, symbol, timeframe_data, ticker_info
+        
+        Returns: Formatted consolidated message
+        """
+        if not alerts:
+            return None
+        
+        # Count oversold vs overbought
+        oversold = [a for a in alerts if a['timeframe_data']['15m']['signal'] == 'OVERSOLD']
+        overbought = [a for a in alerts if a['timeframe_data']['15m']['signal'] == 'OVERBOUGHT']
+        
+        # Build header
+        msg = "📊 **STOCHASTIC RSI ALERTS** 📊\n"
+        msg += f"⏰ {alerts[0].get('timestamp', '')}\n\n"
+        msg += f"**Total Signals:** {len(alerts)}\n"
+        msg += f"🟢 Oversold: {len(oversold)} | 🔴 Overbought: {len(overbought)}\n"
+        msg += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        
+        # Group by signal type
+        if oversold:
+            msg += "🟢 **OVERSOLD SIGNALS**\n\n"
+            for alert in oversold:
+                msg += self._format_compact_alert(alert)
+                msg += "\n"
+        
+        if overbought:
+            msg += "🔴 **OVERBOUGHT SIGNALS**\n\n"
+            for alert in overbought:
+                msg += self._format_compact_alert(alert)
+                msg += "\n"
+        
+        # Footer
+        msg += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        msg += "💡 Use TradingView links for detailed chart analysis\n"
+        
+        return msg
+    
+    def _format_compact_alert(self, alert: dict) -> str:
+        """Format a single alert in compact format"""
+        base_symbol = alert['base_symbol']
+        ticker = alert['ticker_info']
+        tf_data = alert['timeframe_data']
+        
+        # Price and change
+        price = ticker.get('price', 0)
+        change = ticker.get('change_24h', 0)
+        change_emoji = '📈' if change > 0 else '📉'
+        
+        # Build compact format
+        msg = f"**{base_symbol}** | ${price:.4f} | {change_emoji} {change:+.2f}%\n"
+        
+        # Timeframes in single line
+        tf_labels = {'15m': '15m', '1h': '1h', '4h': '4h', '1d': '1D'}
+        tf_line = "  "
+        
+        for tf in ['15m', '1h', '4h', '1d']:
+            k = tf_data[tf]['k']
+            d = tf_data[tf]['d']
+            signal = tf_data[tf]['signal']
+            
+            # Signal emoji
+            if signal == 'OVERBOUGHT':
+                emoji = '🔴'
+            elif signal == 'OVERSOLD':
+                emoji = '🟢'
+            else:
+                emoji = '⚪'
+            
+            if k and d:
+                tf_line += f"{emoji}{tf_labels[tf]}:{k:.0f}/{d:.0f} "
+            else:
+                tf_line += f"{emoji}{tf_labels[tf]}:N/A "
+        
+        msg += tf_line + "\n"
+        msg += f"  📊 [Chart](https://www.tradingview.com/chart/?symbol=BINANCE:{base_symbol}USDT&interval=15) | "
+        msg += f"[Analytics](https://www.coinglass.com/currencies/{base_symbol.lower()})\n"
+        
+        return msg
+    
     async def send_message(self, message: str) -> bool:
         """Send Telegram message asynchronously - MUST BE AWAITED"""
         try:
-            await self.bot.send_message(
-                chat_id=self.chat_id,
-                text=message,
-                parse_mode='Markdown',
-                disable_web_page_preview=True
-            )
+            # Check message length and split if needed (Telegram limit: 4096 chars)
+            if len(message) <= 4096:
+                await self.bot.send_message(
+                    chat_id=self.chat_id,
+                    text=message,
+                    parse_mode='Markdown',
+                    disable_web_page_preview=True
+                )
+            else:
+                # Split message into chunks
+                chunks = self._split_message(message, 4096)
+                for i, chunk in enumerate(chunks):
+                    await self.bot.send_message(
+                        chat_id=self.chat_id,
+                        text=f"[Part {i+1}/{len(chunks)}]\n\n{chunk}",
+                        parse_mode='Markdown',
+                        disable_web_page_preview=True
+                    )
+                    # Small delay between chunks
+                    import asyncio
+                    await asyncio.sleep(0.5)
+            
             return True
         except TelegramError as e:
             print(f"Telegram error: {e}")
             return False
+    
+    def _split_message(self, message: str, limit: int) -> list:
+        """Split long message into chunks respecting word boundaries"""
+        if len(message) <= limit:
+            return [message]
+        
+        chunks = []
+        lines = message.split('\n')
+        current_chunk = ""
+        
+        for line in lines:
+            if len(current_chunk) + len(line) + 1 <= limit:
+                current_chunk += line + '\n'
+            else:
+                if current_chunk:
+                    chunks.append(current_chunk.strip())
+                current_chunk = line + '\n'
+        
+        if current_chunk:
+            chunks.append(current_chunk.strip())
+        
+        return chunks
