@@ -58,6 +58,7 @@ class TelegramNotifier:
         """
         Format a single alert in compact format
         Changed: Now shows 1h, 4h, 1d (removed 15m)
+        Updated: CoinGlass link to Liquidation Heatmap
         """
         base_symbol = alert['base_symbol']
         ticker = alert['ticker_info']
@@ -94,9 +95,10 @@ class TelegramNotifier:
                 tf_line += f"{emoji}{tf_labels[tf]}:N/A "
         
         msg += tf_line + "\n"
-        # Changed chart link to 1h interval
+        
+        # Updated links
         msg += f"  📊 [Chart](https://www.tradingview.com/chart/?symbol=BINANCE:{base_symbol}USDT&interval=60) | "
-        msg += f"[Analytics](https://www.coinglass.com/currencies/{base_symbol.lower()})\n"
+        msg += f"[Liquidation](https://www.coinglass.com/pro/futures/LiquidationHeatMapNew?coin={base_symbol})\n"
         
         return msg
     
