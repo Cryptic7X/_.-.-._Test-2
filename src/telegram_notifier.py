@@ -9,81 +9,10 @@ class TelegramNotifier:
         self.bot = Bot(token=bot_token)
         self.chat_id = chat_id
     
-    def format_message(self, base_symbol: str, full_symbol: str, timeframe_data: dict, ticker_info: dict) -> str:
-        """
-        Format comprehensive alert message
-        
-        Args:
-            base_symbol: Base currency (e.g., 'BTC')
-            full_symbol: Full trading pair (e.g., 'BTC/USDT')
-            timeframe_data: {timeframe: {'k': float, 'd': float, 'signal': str}}
-            ticker_info: {'price': float, 'change_24h': float}
-        
-        Returns: Formatted message string
-        """
-        # Determine alert type from 15m timeframe
-        base_signal = timeframe_data.get('15m', {}).get('signal', 'NEUTRAL')
-        
-        # Emoji based on signal type
-        if base_signal == 'OVERBOUGHT':
-            emoji = '🔴'
-            alert_type = 'OVERBOUGHT ALERT'
-        elif base_signal == 'OVERSOLD':
-            emoji = '🟢'
-            alert_type = 'OVERSOLD ALERT'
-        else:
-            emoji = '⚪'
-            alert_type = 'NEUTRAL'
-        
-        # Build message
-        msg = f"{emoji} **{alert_type}** {emoji}\n\n"
-        msg += f"**Symbol:** {base_symbol}\n"
-        msg += f"**Pair:** {full_symbol}\n"
-        msg += f"**Price:** ${ticker_info.get('price', 0):.4f}\n"
-        
-        change = ticker_info.get('change_24h', 0)
-        change_emoji = '📈' if change > 0 else '📉'
-        msg += f"**24h Change:** {change_emoji} {change:+.2f}%\n\n"
-        
-        msg += "**Stochastic RSI Analysis:**\n"
-        msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
-        
-        # Timeframe analysis (15m, 1h, 4h, 1D)
-        timeframes = ['15m', '1h', '4h', '1d']
-        tf_labels = {'15m': '15 Minutes', '1h': '1 Hour', '4h': '4 Hours', '1d': 'Daily'}
-        
-        for tf in timeframes:
-            data = timeframe_data.get(tf, {})
-            k = data.get('k', 'N/A')
-            d = data.get('d', 'N/A')
-            signal = data.get('signal', 'NEUTRAL')
-            
-            # Format values
-            k_str = f"{k:.2f}" if isinstance(k, (int, float)) else k
-            d_str = f"{d:.2f}" if isinstance(d, (int, float)) else d
-            
-            # Signal indicator
-            if signal == 'OVERBOUGHT':
-                indicator = '🔴'
-            elif signal == 'OVERSOLD':
-                indicator = '🟢'
-            else:
-                indicator = '⚪'
-            
-            msg += f"{indicator} **{tf_labels[tf]}**\n"
-            msg += f"   %K: {k_str}  |  %D: {d_str}\n"
-            msg += f"   Status: {signal}\n\n"
-        
-        # Links - use base symbol for TradingView
-        msg += "**Quick Links:**\n"
-        msg += f"📊 [TradingView 15m Chart](https://www.tradingview.com/chart/?symbol=BINANCE:{base_symbol}USDT&interval=15)\n"
-        msg += f"📈 [CoinGlass Analytics](https://www.coinglass.com/currencies/{base_symbol.lower()})\n"
-        
-        return msg
-    
     def format_bulk_message(self, alerts: list) -> str:
         """
         Format multiple alerts into a single consolidated message
+        Changed: Using 1h as base timeframe (was 15m)
         
         Args:
             alerts: List of dicts with keys: base_symbol, symbol, timeframe_data, ticker_info
@@ -93,13 +22,14 @@ class TelegramNotifier:
         if not alerts:
             return None
         
-        # Count oversold vs overbought
-        oversold = [a for a in alerts if a['timeframe_data']['15m']['signal'] == 'OVERSOLD']
-        overbought = [a for a in alerts if a['timeframe_data']['15m']['signal'] == 'OVERBOUGHT']
+        # Count oversold vs overbought (based on 1h now)
+        oversold = [a for a in alerts if a['timeframe_data'].get('1h', {}).get('signal') == 'OVERSOLD']
+        overbought = [a for a in alerts if a['timeframe_data'].get('1h', {}).get('signal') == 'OVERBOUGHT']
         
         # Build header
         msg = "📊 **STOCHASTIC RSI ALERTS** 📊\n"
-        msg += f"⏰ {alerts[0].get('timestamp', '')}\n\n"
+        msg += f"⏰ {alerts[0].get('timestamp', '')}\n"
+        msg += f"📍 Base Timeframe: **1 HOUR**\n\n"
         msg += f"**Total Signals:** {len(alerts)}\n"
         msg += f"🟢 Oversold: {len(oversold)} | 🔴 Overbought: {len(overbought)}\n"
         msg += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -119,12 +49,16 @@ class TelegramNotifier:
         
         # Footer
         msg += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        msg += "💡 Use TradingView links for detailed chart analysis\n"
+        msg += "💡 Signals based on 1-hour timeframe\n"
+        msg += "📊 Use TradingView links for detailed analysis\n"
         
         return msg
     
     def _format_compact_alert(self, alert: dict) -> str:
-        """Format a single alert in compact format"""
+        """
+        Format a single alert in compact format
+        Changed: Now shows 1h, 4h, 1d (removed 15m)
+        """
         base_symbol = alert['base_symbol']
         ticker = alert['ticker_info']
         tf_data = alert['timeframe_data']
@@ -137,14 +71,14 @@ class TelegramNotifier:
         # Build compact format
         msg = f"**{base_symbol}** | ${price:.4f} | {change_emoji} {change:+.2f}%\n"
         
-        # Timeframes in single line
-        tf_labels = {'15m': '15m', '1h': '1h', '4h': '4h', '1d': '1D'}
+        # Timeframes in single line (1h, 4h, 1d)
+        tf_labels = {'1h': '1h', '4h': '4h', '1d': '1D'}
         tf_line = "  "
         
-        for tf in ['15m', '1h', '4h', '1d']:
-            k = tf_data[tf]['k']
-            d = tf_data[tf]['d']
-            signal = tf_data[tf]['signal']
+        for tf in ['1h', '4h', '1d']:
+            k = tf_data.get(tf, {}).get('k')
+            d = tf_data.get(tf, {}).get('d')
+            signal = tf_data.get(tf, {}).get('signal', 'NEUTRAL')
             
             # Signal emoji
             if signal == 'OVERBOUGHT':
@@ -154,13 +88,14 @@ class TelegramNotifier:
             else:
                 emoji = '⚪'
             
-            if k and d:
+            if k is not None and d is not None:
                 tf_line += f"{emoji}{tf_labels[tf]}:{k:.0f}/{d:.0f} "
             else:
                 tf_line += f"{emoji}{tf_labels[tf]}:N/A "
         
         msg += tf_line + "\n"
-        msg += f"  📊 [Chart](https://www.tradingview.com/chart/?symbol=BINANCE:{base_symbol}USDT&interval=15) | "
+        # Changed chart link to 1h interval
+        msg += f"  📊 [Chart](https://www.tradingview.com/chart/?symbol=BINANCE:{base_symbol}USDT&interval=60) | "
         msg += f"[Analytics](https://www.coinglass.com/currencies/{base_symbol.lower()})\n"
         
         return msg
