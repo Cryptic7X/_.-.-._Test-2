@@ -39,21 +39,20 @@ def analyze_single_coin(base_symbol, data_fetcher, signal_detector):
     try:
         symbol = get_trading_symbol(base_symbol, data_fetcher)
         
-        timeframes = ['15m', '1h', '4h', '1d']
+        timeframes = ['1h', '4h', '1d']  # Changed: Removed 15m, kept 1h as base
         timeframe_data = {}
         
-        # Fetch OHLCV for all timeframes
-        ohlcv_data = data_fetcher.fetch_multi_timeframe_data(symbol, timeframes)
-        
-        # Calculate Stochastic RSI for each timeframe
+        # Fetch OHLCV for all timeframes (increased to 150 candles for accuracy)
         for tf in timeframes:
-            if ohlcv_data[tf] is None:
+            ohlcv = data_fetcher.fetch_ohlcv(symbol, tf, limit=150)
+            
+            if ohlcv is None or len(ohlcv) < 50:
                 timeframe_data[tf] = {'k': None, 'd': None, 'signal': 'NEUTRAL'}
                 continue
             
             try:
                 stoch_data = get_latest_stoch_rsi(
-                    ohlcv_data[tf],
+                    ohlcv,
                     smooth_k=3,
                     smooth_d=3,
                     rsi_length=14,
@@ -71,6 +70,7 @@ def analyze_single_coin(base_symbol, data_fetcher, signal_detector):
                 }
                 
             except Exception as e:
+                print(f"    Error calculating {tf} for {base_symbol}: {str(e)[:40]}")
                 timeframe_data[tf] = {'k': None, 'd': None, 'signal': 'NEUTRAL'}
         
         # Get ticker info
@@ -78,15 +78,15 @@ def analyze_single_coin(base_symbol, data_fetcher, signal_detector):
         if ticker_info is None:
             ticker_info = {'price': 0, 'change_24h': 0}
         
-        # Print result
-        base_signal = timeframe_data['15m']['signal']
-        k_val = timeframe_data['15m']['k']
-        d_val = timeframe_data['15m']['d']
+        # Print result - now using 1h as base
+        base_signal = timeframe_data.get('1h', {}).get('signal', 'NEUTRAL')
+        k_val = timeframe_data.get('1h', {}).get('k')
+        d_val = timeframe_data.get('1h', {}).get('d')
         
-        if k_val and d_val:
-            print(f"✓ {base_symbol:8s} | 15m: K={k_val:6.2f} D={d_val:6.2f} [{base_signal}]")
+        if k_val is not None and d_val is not None:
+            print(f"✓ {base_symbol:8s} | 1h: K={k_val:6.2f} D={d_val:6.2f} [{base_signal}]")
         else:
-            print(f"✗ {base_symbol:8s} | No data")
+            print(f"✗ {base_symbol:8s} | No valid 1h data")
         
         return {
             'base_symbol': base_symbol,
@@ -137,14 +137,16 @@ async def analyze_coins_parallel(coins, data_fetcher, signal_detector, max_worke
 async def send_consolidated_alert(results, signal_detector, telegram_notifier):
     """
     Send a SINGLE consolidated alert with all qualifying signals
+    Base timeframe is now 1h (changed from 15m)
     
     Returns: Number of signals included in the alert
     """
-    # Collect all qualifying alerts
+    # Collect all qualifying alerts based on 1H timeframe
     qualifying_alerts = []
     
     for result in results:
-        base_signal = result['timeframe_data']['15m']['signal']
+        # Changed: Using 1h as base timeframe instead of 15m
+        base_signal = result['timeframe_data'].get('1h', {}).get('signal', 'NEUTRAL')
         
         if signal_detector.should_send_alert(result['base_symbol'], base_signal):
             # Add timestamp
@@ -172,7 +174,8 @@ async def send_consolidated_alert(results, signal_detector, telegram_notifier):
 async def main_async():
     """Main analysis loop with parallel processing"""
     print("🚀 Starting Stochastic RSI Analysis System (PARALLEL MODE)")
-    print(f"⏰ Time: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+    print(f"⏰ Time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"📍 Base Timeframe: 1 HOUR (changed from 15m)\n")
     
     start_time = time.time()
     
@@ -192,7 +195,8 @@ async def main_async():
     # Load coin list
     coins = load_coin_list()
     print(f"📋 Loaded {len(coins)} coins from coins.txt")
-    print(f"🔧 Parallel workers: 10 coins at a time\n")
+    print(f"🔧 Parallel workers: 10 coins at a time")
+    print(f"📊 Timeframes: 1h (base), 4h, 1d\n")
     
     # Analyze all coins in parallel
     results = await analyze_coins_parallel(coins, data_fetcher, signal_detector, max_workers=10)
