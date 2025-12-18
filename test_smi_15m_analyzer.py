@@ -175,4 +175,47 @@ class Test15MAnalyzer:
             print(f"❌ Telegram failed: {e}")
             return False
     
-    def run(
+    def run(self):
+        """Run test analysis"""
+        print(f"\n{'#'*60}")
+        print(f"# TEST: 15M SMI CROSSOVER DETECTION")
+        print(f"# Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}")
+        print(f"{'#'*60}\n")
+        
+        if not self.test_coins:
+            print("❌ No test coins loaded")
+            return
+        
+        all_alerts = []
+        
+        for symbol in self.test_coins:
+            alerts = self.analyze_coin(symbol)
+            if alerts:
+                all_alerts.extend(alerts)
+        
+        print(f"\n{'='*60}")
+        print(f"📊 SUMMARY")
+        print(f"{'='*60}")
+        print(f"Coins analyzed: {len(self.test_coins)}")
+        print(f"Crosses found: {len(all_alerts)}")
+        
+        if all_alerts:
+            print(f"\n📨 Sending {len(all_alerts)} alerts to Telegram...")
+            self.send_telegram(all_alerts)
+        else:
+            print(f"\nℹ️ No crossovers detected")
+        
+        print(f"\n{'#'*60}")
+        print(f"# TEST COMPLETE")
+        print(f"{'#'*60}\n")
+
+
+if __name__ == '__main__':
+    try:
+        analyzer = Test15MAnalyzer()
+        analyzer.run()
+    except Exception as e:
+        print(f"\n❌ FATAL ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
