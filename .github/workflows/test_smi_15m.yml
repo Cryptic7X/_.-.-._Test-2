@@ -1,0 +1,51 @@
+name: TEST - 15M SMI Crossover Detection
+
+on:
+  # Manual trigger
+  workflow_dispatch:
+  
+  # Scheduled: Every 15 minutes
+  schedule:
+    - cron: '*/15 * * * *'
+
+jobs:
+  test-smi-15m:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ccxt pandas numpy requests
+      
+      - name: Run 15M SMI Test
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          echo "🧪 Starting 15M SMI Crossover Test..."
+          python test_smi_15m_analyzer.py
+      
+      - name: Test Summary
+        if: always()
+        run: |
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ 15M SMI Test Complete"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "📊 Configuration:"
+          echo "  - Timeframe: 15 minutes"
+          echo "  - Lookback: Last 2 candles + current"
+          echo "  - OB/OS Levels: +40 / -40"
+          echo "  - Data Source: CCXT"
+          echo "  - Alert: Telegram"
+          echo ""
