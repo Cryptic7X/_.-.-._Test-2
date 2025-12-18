@@ -26,6 +26,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install ccxt pandas numpy requests
       
+      - name: Debug Environment
+        run: |
+          echo "🔍 Environment Check:"
+          echo "Python version: $(python --version)"
+          echo "Pip packages:"
+          pip list | grep -E 'ccxt|pandas|numpy|requests'
+          echo ""
+          echo "Files in directory:"
+          ls -la
+          echo ""
+          if [ -f coins.txt ]; then
+            echo "coins.txt content:"
+            cat coins.txt
+          else
+            echo "⚠️ coins.txt not found!"
+          fi
+          echo ""
+      
       - name: Run 15M SMI Test
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -46,6 +64,6 @@ jobs:
           echo "  - Timeframe: 15 minutes"
           echo "  - Lookback: Last 2 candles + current"
           echo "  - OB/OS Levels: +40 / -40"
-          echo "  - Data Source: CCXT"
+          echo "  - Data Source: CCXT (BingX → KuCoin → OKX)"
           echo "  - Alert: Telegram"
           echo ""
